@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "ffi-napi": "4.0.3",
+    "ip-to-int": "0.3.1",
     "protobufjs": "7.2.6",
     "ref-napi": "3.0.3",
     "ref-struct-di": "1.1.1"

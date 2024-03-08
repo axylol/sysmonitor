@@ -7,7 +7,10 @@ const Reply = pSysMonitor.lookupType("Reply")
 
 const ffi = require("ffi-napi")
 const ref = require("ref-napi")
+const ipInt = require("ip-to-int")
 const StructType = require("ref-struct-di")(ref)
+
+const { address } = require("./config.json")
 
 const mq_attr = StructType({
     mq_flags: "int",
@@ -76,6 +79,12 @@ const sReply = mqOpen("/sysmonitoremu.reply2", 0o00000001)
 
 console.log(sCommand, sReply)
 
+let sequence = 1;
+
+function ipToInt(ip) {
+    return ipInt(ip).toInt()
+}
+
 setInterval(() => {
     const [ret, data, prio] = mqReceive(sCommand)
     if (ret < 0)
@@ -83,25 +92,28 @@ setInterval(() => {
     const command = Command.decode(data.subarray(0, ret))
     console.log(command)
 
+    if (command.sequence)
+        sequence = command.sequence;
+
     // all of this is just guessing
     // but it should work
 
-    const reply = {
-        sequence: command.sequence ?? undefined
-    }
+    const reply = { sequence: sequence++ }
 
     if (command.checkCable) {
         reply.checkCable = {
             state: 3,
             name: command.checkCable,
-            address: "192.168.92.11"
+            address: ipToInt(address)
         }
     }
 
     if (command.traceRoute) {
+        // TODO: fix
         reply.traceRoute = {
             state: 3,
-            value: command.traceRoute
+            address: command.traceRoute,
+            value: 1
         }
     }
 
@@ -109,16 +121,17 @@ setInterval(() => {
         reply.renewDhcp = {
             state: 3,
             name: command.renewDhcp,
-            address: "192.168.92.11"
+            address: ipToInt(address)
         }
     }
 
-    reply.ping = []
     if (command.ping && command.ping.length > 0) {
+        reply.ping = []
         for (let i = 0; i < command.ping.length; i++) {
             reply.ping.push({
                 state: 3,
-                value: 0
+                address: command.ping[i],
+                value: 2
             })
         }
     }
@@ -129,12 +142,12 @@ setInterval(() => {
         }
     }
 
-    for (let key in reply)
-        if (reply[key].state)
-            reply[key].state = 1;
-    mqSend(sReply, Reply.encode(reply).finish(), prio)
-    for (let key in reply)
-        if (reply[key].state)
-            reply[key].state = 3;
-    mqSend(sReply, Reply.encode(reply).finish(), prio)
+    if (command.setDate) {
+        reply.setDate = {
+            state: 3
+        }
+    }
+
+    console.log(reply)
+    mqSend(sReply, Reply.encode(reply).finish(), prio)    
 }, 16)
